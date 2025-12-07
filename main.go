@@ -69,9 +69,11 @@ func main() {
 		router.Use(sentrygin.New(sentrygin.Options{}))
 	}
 
-	router.GET("/ping", func(c *gin.Context) {
+	pingHandler := func(c *gin.Context) {
 		c.String(http.StatusOK, "pong")
-	})
+	}
+	router.GET("/ping", pingHandler)
+	router.HEAD("/ping", pingHandler)
 
 	handler.Register(router)
 

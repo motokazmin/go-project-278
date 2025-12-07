@@ -1,0 +1,19 @@
+:80
+
+root * /app/public
+
+@assets path /assets/*
+handle @assets {
+    file_server
+}
+
+@root path /
+handle @root {
+    file_server
+}
+
+# Все остальные запросы — на бэкенд
+handle {
+    reverse_proxy localhost:8080
+}
+
