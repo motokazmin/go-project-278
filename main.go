@@ -1,6 +1,7 @@
 package main
 
 import (
+	"database/sql"
 	"errors"
 	"log"
 	"net/http"
@@ -10,15 +11,37 @@ import (
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
 	"github.com/gin-gonic/gin"
+	_ "github.com/jackc/pgx/v5/stdlib"
+
+	"urlcutter/internal/db"
+	"urlcutter/internal/links"
 )
 
 func main() {
-	router := gin.Default()
-
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
+
+	baseURL := os.Getenv("BASE_URL")
+
+	dbURL := os.Getenv("DATABASE_URL")
+	if dbURL == "" {
+		log.Fatal("DATABASE_URL is required")
+	}
+
+	conn, err := openDB(dbURL)
+	if err != nil {
+		log.Fatalf("failed to connect database: %v", err)
+	}
+	defer conn.Close()
+
+	queries := db.New(conn)
+	repo := links.NewRepo(queries)
+	service := links.NewService(repo, baseURL)
+	handler := links.NewHandler(service)
+
+	router := gin.Default()
 
 	dsn := os.Getenv("SENTRY_DSN")
 	if dsn == "" {
@@ -37,6 +60,8 @@ func main() {
 		c.String(http.StatusOK, "pong")
 	})
 
+	handler.Register(router)
+
 	router.GET("/debug-sentry", func(c *gin.Context) {
 		hub := sentrygin.GetHubFromContext(c)
 		if hub == nil {
@@ -53,4 +78,15 @@ func main() {
 	if err := router.Run(":" + port); err != nil {
 		log.Fatalf("failed to run server: %v", err)
 	}
+}
+
+func openDB(dsn string) (*sql.DB, error) {
+	db, err := sql.Open("pgx", dsn)
+	if err != nil {
+		return nil, err
+	}
+	if err := db.Ping(); err != nil {
+		return nil, err
+	}
+	return db, nil
 }
