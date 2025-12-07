@@ -10,6 +10,7 @@ import (
 
 	"github.com/getsentry/sentry-go"
 	sentrygin "github.com/getsentry/sentry-go/gin"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
@@ -42,6 +43,18 @@ func main() {
 	handler := links.NewHandler(service)
 
 	router := gin.Default()
+
+	corsOrigin := os.Getenv("FRONTEND_ORIGIN")
+	if corsOrigin == "" {
+		corsOrigin = "http://localhost:5173"
+	}
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{corsOrigin},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept", "Range", "Authorization"},
+		ExposeHeaders:    []string{"Content-Range"},
+		AllowCredentials: false,
+	}))
 
 	dsn := os.Getenv("SENTRY_DSN")
 	if dsn == "" {

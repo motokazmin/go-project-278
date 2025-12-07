@@ -1,0 +1,14 @@
+{
+  "name": "urlcutter",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"PORT=${PORT:-8080} BASE_URL=${BASE_URL:-http://localhost:8080} go run .\" \"npx start-hexlet-url-shortener-frontend\"",
+    "dev": "npm start",
+    "frontend": "npx start-hexlet-url-shortener-frontend"
+  },
+  "dependencies": {
+    "@hexlet/project-url-shortener-frontend": "^1.0.0",
+    "concurrently": "^9.0.1"
+  }
+}

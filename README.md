@@ -1,6 +1,6 @@
 # URL Cutter
 
-Go-приложение на Gin. Добавлена интеграция с Sentry и готовый Docker-образ для деплоя на Render.
+Простое Go-приложение на Gin. Добавлена интеграция с Sentry и готовый Docker-образ для деплоя на Render.
 
 ## Среда и переменные
 
@@ -41,16 +41,10 @@ docker run --rm -p 8080:8080 \
 
 ## Деплой на Render
 
-1) Создать Web Service: Language — Docker, Instance Type — Free.  
+1) Создаем Web Service: Language — Docker, Instance Type — Free.  
 2) Render возьмет `Dockerfile` из корня.  
-3) Добавьте переменные окружения: `PORT=8080`, `DATABASE_URL`, `SENTRY_DSN`.  
-4) Дождиться сборки и убедитесь, что приложение доступно по HTTPS.  
-5) Для проверки Sentry вызвать `/debug-sentry`.
-
-## Прод-окружение
-
-Ссылка на развернутое приложение: `<добавить URL Render после деплоя>`. - к сожалению Render
-требует банковскую карту, пока тестирую локально, постгрес база развернута на cockroachlabs.cloud
+3) Добавим переменные окружения: `PORT=8080`, `DATABASE_URL`, `SENTRY_DSN`.  
+4) Для проверки Sentry вызвать `/debug-sentry`.
 
 ## Миграции и sqlc
 
@@ -59,3 +53,14 @@ docker run --rm -p 8080:8080 \
 
 ### Hexlet tests and linter status:
 [![Actions Status](https://github.com/motokazmin/go-project-278/actions/workflows/hexlet-check.yml/badge.svg)](https://github.com/motokazmin/go-project-278/actions)
+
+
+docker run --rm -p 8080:8080 \
+  --add-host=host.docker.internal:host-gateway \
+  -e PORT=8080 \
+  -e BASE_URL="http://localhost:8080" \
+  -e DATABASE_URL="postgres://user:pass@host.docker.internal:5432/db?sslmode=disable" \
+  -e SENTRY_DSN="..." \
+  urlcutter
+
+  npm start поднимает одновременно API (8080) и фронт (5173). CORS разрешён для FRONTEND_ORIGIN (по умолчанию http://localhost:5173).
