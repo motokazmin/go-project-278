@@ -7,6 +7,7 @@ import (
 
 	"github.com/jackc/pgconn"
 	"github.com/stretchr/testify/assert"
+	"sort"
 
 	"urlcutter/internal/db"
 )
@@ -23,12 +24,22 @@ func newMemRepo() *memRepo {
 	}
 }
 
-func (m *memRepo) ListLinks(ctx context.Context) ([]db.Link, error) {
+func (m *memRepo) ListLinksRange(ctx context.Context, offset int32, limit int32) ([]db.Link, error) {
 	out := make([]db.Link, 0, len(m.items))
 	for _, v := range m.items {
 		out = append(out, v)
 	}
-	return out, nil
+	// simple deterministic order by ID
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	start := int(offset)
+	if start > len(out) {
+		return []db.Link{}, nil
+	}
+	end := start + int(limit)
+	if end > len(out) {
+		end = len(out)
+	}
+	return out[start:end], nil
 }
 
 func (m *memRepo) GetLink(ctx context.Context, id int64) (db.Link, error) {
@@ -83,6 +94,10 @@ func (m *memRepo) DeleteLink(ctx context.Context, id int64) (int64, error) {
 	}
 	delete(m.items, id)
 	return id, nil
+}
+
+func (m *memRepo) CountLinks(ctx context.Context) (int64, error) {
+	return int64(len(m.items)), nil
 }
 
 func TestCreateGeneratesShortName(t *testing.T) {

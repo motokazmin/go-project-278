@@ -24,11 +24,12 @@ var (
 )
 
 type Repository interface {
-	ListLinks(ctx context.Context) ([]db.Link, error)
+	ListLinksRange(ctx context.Context, offset int32, limit int32) ([]db.Link, error)
 	GetLink(ctx context.Context, id int64) (db.Link, error)
 	CreateLink(ctx context.Context, arg db.CreateLinkParams) (db.Link, error)
 	UpdateLink(ctx context.Context, arg db.UpdateLinkParams) (db.Link, error)
 	DeleteLink(ctx context.Context, id int64) (int64, error)
+	CountLinks(ctx context.Context) (int64, error)
 }
 
 type Service struct {
@@ -44,8 +45,16 @@ func NewService(repo Repository, baseURL string) *Service {
 	return &Service{repo: repo, baseURL: baseURL}
 }
 
-func (s *Service) List(ctx context.Context) ([]db.Link, error) {
-	return s.repo.ListLinks(ctx)
+func (s *Service) List(ctx context.Context, offset, limit int32) ([]db.Link, int64, error) {
+	items, err := s.repo.ListLinksRange(ctx, offset, limit)
+	if err != nil {
+		return nil, 0, err
+	}
+	total, err := s.repo.CountLinks(ctx)
+	if err != nil {
+		return nil, 0, err
+	}
+	return items, total, nil
 }
 
 func (s *Service) Get(ctx context.Context, id int64) (db.Link, error) {

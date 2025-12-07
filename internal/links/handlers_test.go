@@ -15,18 +15,18 @@ import (
 )
 
 type stubService struct {
-	listFn   func(ctx context.Context) ([]db.Link, error)
+	listFn   func(ctx context.Context, offset, limit int32) ([]db.Link, int64, error)
 	getFn    func(ctx context.Context, id int64) (db.Link, error)
 	createFn func(ctx context.Context, originalURL, shortName string) (db.Link, error)
 	updateFn func(ctx context.Context, id int64, originalURL, shortName string) (db.Link, error)
 	deleteFn func(ctx context.Context, id int64) error
 }
 
-func (s *stubService) List(ctx context.Context) ([]db.Link, error) {
+func (s *stubService) List(ctx context.Context, offset, limit int32) ([]db.Link, int64, error) {
 	if s.listFn == nil {
-		return nil, nil
+		return nil, 0, nil
 	}
-	return s.listFn(ctx)
+	return s.listFn(ctx, offset, limit)
 }
 func (s *stubService) Get(ctx context.Context, id int64) (db.Link, error) {
 	if s.getFn == nil {
@@ -62,10 +62,10 @@ func newTestRouter(svc LinkService) *gin.Engine {
 
 func TestListLinks(t *testing.T) {
 	svc := &stubService{
-		listFn: func(ctx context.Context) ([]db.Link, error) {
+		listFn: func(ctx context.Context, offset, limit int32) ([]db.Link, int64, error) {
 			return []db.Link{
 				{ID: 1, OriginalUrl: "https://example.com", ShortName: "ex", ShortUrl: "https://short/ex"},
-			}, nil
+			}, 1, nil
 		},
 	}
 	r := newTestRouter(svc)
@@ -76,6 +76,39 @@ func TestListLinks(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"id":1`)
+	assert.Equal(t, "links 0-0/1", w.Header().Get("Content-Range"))
+}
+
+func TestListLinksWithRange(t *testing.T) {
+	svc := &stubService{
+		listFn: func(ctx context.Context, offset, limit int32) ([]db.Link, int64, error) {
+			assert.Equal(t, int32(5), offset)
+			assert.Equal(t, int32(5), limit)
+			return []db.Link{
+				{ID: 6, OriginalUrl: "https://example.com/6", ShortName: "s6", ShortUrl: "http://localhost/r/s6"},
+				{ID: 7, OriginalUrl: "https://example.com/7", ShortName: "s7", ShortUrl: "http://localhost/r/s7"},
+			}, 11, nil
+		},
+	}
+	r := newTestRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/links?range=[5,9]", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "links 5-6/11", w.Header().Get("Content-Range"))
+}
+
+func TestListLinksInvalidRange(t *testing.T) {
+	svc := &stubService{}
+	r := newTestRouter(svc)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/links?range=bad", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
 func TestCreateLinkConflict(t *testing.T) {

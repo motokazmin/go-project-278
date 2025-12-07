@@ -2,9 +2,12 @@ package links
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -16,7 +19,7 @@ type Handler struct {
 }
 
 type LinkService interface {
-	List(ctx context.Context) ([]db.Link, error)
+	List(ctx context.Context, offset, limit int32) ([]db.Link, int64, error)
 	Get(ctx context.Context, id int64) (db.Link, error)
 	Create(ctx context.Context, originalURL, shortName string) (db.Link, error)
 	Update(ctx context.Context, id int64, originalURL, shortName string) (db.Link, error)
@@ -51,7 +54,19 @@ func (h *Handler) Register(r *gin.Engine) {
 }
 
 func (h *Handler) listLinks(c *gin.Context) {
-	links, err := h.service.List(c.Request.Context())
+	start, end, ok := parseRangeParam(c.Query("range"))
+	if !ok {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		return
+	}
+
+	limit := end - start + 1
+	if limit <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		return
+	}
+
+	links, total, err := h.service.List(c.Request.Context(), int32(start), int32(limit))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -62,6 +77,11 @@ func (h *Handler) listLinks(c *gin.Context) {
 		resp = append(resp, toResponse(l))
 	}
 
+	lastIndex := start + len(resp) - 1
+	if len(resp) == 0 {
+		lastIndex = start
+	}
+	c.Header("Content-Range", formatContentRange(start, lastIndex, total))
 	c.JSON(http.StatusOK, resp)
 }
 
@@ -165,6 +185,30 @@ func (h *Handler) deleteLink(c *gin.Context) {
 
 func parseID(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
+}
+
+func parseRangeParam(raw string) (start int, end int, ok bool) {
+	if strings.TrimSpace(raw) == "" {
+		// default: first 10
+		return 0, 9, true
+	}
+
+	var arr []int
+	if err := json.Unmarshal([]byte(raw), &arr); err != nil {
+		return 0, 0, false
+	}
+	if len(arr) != 2 {
+		return 0, 0, false
+	}
+	start, end = arr[0], arr[1]
+	if start < 0 || end < start {
+		return 0, 0, false
+	}
+	return start, end, true
+}
+
+func formatContentRange(start, end int, total int64) string {
+	return fmt.Sprintf("links %d-%d/%d", start, end, total)
 }
 
 func toResponse(l db.Link) linkResponse {
