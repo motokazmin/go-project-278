@@ -63,7 +63,7 @@ FROM links
 WHERE id = $1
 `
 
-func (q *Queries) GetLink(ctx context.Context, id int64) (Link, error) {
+func (q *Queries) Link(ctx context.Context, id int64) (Link, error) {
 	row := q.db.QueryRowContext(ctx, getLink, id)
 	var i Link
 	err := row.Scan(

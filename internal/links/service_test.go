@@ -5,12 +5,15 @@ import (
 	"database/sql"
 	"testing"
 
+	"sort"
+
 	"github.com/jackc/pgconn"
 	"github.com/stretchr/testify/assert"
-	"sort"
 
 	"urlcutter/internal/db"
 )
+
+const testBaseURL = "https://short.test"
 
 type memRepo struct {
 	items map[int64]db.Link
@@ -24,7 +27,7 @@ func newMemRepo() *memRepo {
 	}
 }
 
-func (m *memRepo) ListLinksRange(ctx context.Context, offset int32, limit int32) ([]db.Link, error) {
+func (m *memRepo) ListLinksRange(_ context.Context, offset int32, limit int32) ([]db.Link, error) {
 	out := make([]db.Link, 0, len(m.items))
 	for _, v := range m.items {
 		out = append(out, v)
@@ -42,7 +45,7 @@ func (m *memRepo) ListLinksRange(ctx context.Context, offset int32, limit int32)
 	return out[start:end], nil
 }
 
-func (m *memRepo) GetLink(ctx context.Context, id int64) (db.Link, error) {
+func (m *memRepo) Link(_ context.Context, id int64) (db.Link, error) {
 	v, ok := m.items[id]
 	if !ok {
 		return db.Link{}, sql.ErrNoRows
@@ -50,7 +53,7 @@ func (m *memRepo) GetLink(ctx context.Context, id int64) (db.Link, error) {
 	return v, nil
 }
 
-func (m *memRepo) CreateLink(ctx context.Context, arg db.CreateLinkParams) (db.Link, error) {
+func (m *memRepo) CreateLink(_ context.Context, arg db.CreateLinkParams) (db.Link, error) {
 	for _, v := range m.items {
 		if v.ShortName == arg.ShortName {
 			return db.Link{}, &pgconn.PgError{Code: "23505"}
@@ -68,7 +71,7 @@ func (m *memRepo) CreateLink(ctx context.Context, arg db.CreateLinkParams) (db.L
 	return link, nil
 }
 
-func (m *memRepo) UpdateLink(ctx context.Context, arg db.UpdateLinkParams) (db.Link, error) {
+func (m *memRepo) UpdateLink(_ context.Context, arg db.UpdateLinkParams) (db.Link, error) {
 	_, ok := m.items[arg.ID]
 	if !ok {
 		return db.Link{}, sql.ErrNoRows
@@ -88,7 +91,7 @@ func (m *memRepo) UpdateLink(ctx context.Context, arg db.UpdateLinkParams) (db.L
 	return link, nil
 }
 
-func (m *memRepo) DeleteLink(ctx context.Context, id int64) (int64, error) {
+func (m *memRepo) DeleteLink(_ context.Context, id int64) (int64, error) {
 	if _, ok := m.items[id]; !ok {
 		return 0, sql.ErrNoRows
 	}
@@ -96,13 +99,13 @@ func (m *memRepo) DeleteLink(ctx context.Context, id int64) (int64, error) {
 	return id, nil
 }
 
-func (m *memRepo) CountLinks(ctx context.Context) (int64, error) {
+func (m *memRepo) CountLinks(_ context.Context) (int64, error) {
 	return int64(len(m.items)), nil
 }
 
 func TestCreateGeneratesShortName(t *testing.T) {
 	repo := newMemRepo()
-	svc := NewService(repo, "https://short.test")
+	svc := NewService(repo, testBaseURL)
 
 	link, err := svc.Create(context.Background(), "https://example.com", "")
 	assert.NoError(t, err)
@@ -112,7 +115,7 @@ func TestCreateGeneratesShortName(t *testing.T) {
 
 func TestCreateConflict(t *testing.T) {
 	repo := newMemRepo()
-	svc := NewService(repo, "https://short.test")
+	svc := NewService(repo, testBaseURL)
 
 	_, err := svc.Create(context.Background(), "https://example.com/1", "same")
 	assert.NoError(t, err)
@@ -123,7 +126,7 @@ func TestCreateConflict(t *testing.T) {
 
 func TestUpdateNotFound(t *testing.T) {
 	repo := newMemRepo()
-	svc := NewService(repo, "https://short.test")
+	svc := NewService(repo, testBaseURL)
 
 	_, err := svc.Update(context.Background(), 42, "https://example.com", "name")
 	assert.ErrorIs(t, err, ErrNotFound)
@@ -131,7 +134,7 @@ func TestUpdateNotFound(t *testing.T) {
 
 func TestServiceDeleteNotFound(t *testing.T) {
 	repo := newMemRepo()
-	svc := NewService(repo, "https://short.test")
+	svc := NewService(repo, testBaseURL)
 
 	err := svc.Delete(context.Background(), 123)
 	assert.ErrorIs(t, err, ErrNotFound)
@@ -139,7 +142,7 @@ func TestServiceDeleteNotFound(t *testing.T) {
 
 func TestGetNotFound(t *testing.T) {
 	repo := newMemRepo()
-	svc := NewService(repo, "https://short.test")
+	svc := NewService(repo, testBaseURL)
 
 	_, err := svc.Get(context.Background(), 99)
 	assert.ErrorIs(t, err, ErrNotFound)

@@ -18,6 +18,9 @@ type Handler struct {
 	service LinkService
 }
 
+const invalidIDMessage = "invalid id"
+const linkNotFoundMessage = "link not found"
+
 type LinkService interface {
 	List(ctx context.Context, offset, limit int32) ([]db.Link, int64, error)
 	Get(ctx context.Context, id int64) (db.Link, error)
@@ -54,8 +57,8 @@ func (h *Handler) Register(r *gin.Engine) {
 }
 
 func (h *Handler) listLinks(c *gin.Context) {
-	start, end, ok := parseRangeParam(c.Query("range"))
-	if !ok {
+	start, end, err := parseRangeParam(c.Query("range"))
+	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
 		return
 	}
@@ -88,14 +91,14 @@ func (h *Handler) listLinks(c *gin.Context) {
 func (h *Handler) getLink(c *gin.Context) {
 	id, err := parseID(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": invalidIDMessage})
 		return
 	}
 
 	link, err := h.service.Get(c.Request.Context(), id)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": linkNotFoundMessage})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -106,8 +109,8 @@ func (h *Handler) getLink(c *gin.Context) {
 }
 
 func (h *Handler) createLink(c *gin.Context) {
-	var req linkRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	req := new(linkRequest)
+	if err := c.ShouldBindJSON(req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
@@ -133,7 +136,7 @@ func (h *Handler) createLink(c *gin.Context) {
 func (h *Handler) updateLink(c *gin.Context) {
 	id, err := parseID(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": invalidIDMessage})
 		return
 	}
 
@@ -153,7 +156,7 @@ func (h *Handler) updateLink(c *gin.Context) {
 			c.JSON(http.StatusConflict, gin.H{"error": "short_name already exists"})
 			return
 		case errors.Is(err, ErrNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": linkNotFoundMessage})
 			return
 		default:
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -167,13 +170,13 @@ func (h *Handler) updateLink(c *gin.Context) {
 func (h *Handler) deleteLink(c *gin.Context) {
 	id, err := parseID(c.Param("id"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": invalidIDMessage})
 		return
 	}
 
 	if err := h.service.Delete(c.Request.Context(), id); err != nil {
 		if errors.Is(err, ErrNotFound) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "link not found"})
+			c.JSON(http.StatusNotFound, gin.H{"error": linkNotFoundMessage})
 			return
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -187,24 +190,24 @@ func parseID(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
 }
 
-func parseRangeParam(raw string) (start int, end int, ok bool) {
+func parseRangeParam(raw string) (start int, end int, err error) {
 	if strings.TrimSpace(raw) == "" {
 		// default: first 10
-		return 0, 9, true
+		return 0, 9, nil
 	}
 
 	var arr []int
 	if err := json.Unmarshal([]byte(raw), &arr); err != nil {
-		return 0, 0, false
+		return 0, 0, fmt.Errorf("parse range: %w", err)
 	}
 	if len(arr) != 2 {
-		return 0, 0, false
+		return 0, 0, fmt.Errorf("range must contain two numbers")
 	}
 	start, end = arr[0], arr[1]
 	if start < 0 || end < start {
-		return 0, 0, false
+		return 0, 0, fmt.Errorf("invalid range boundaries")
 	}
-	return start, end, true
+	return start, end, nil
 }
 
 func formatContentRange(start, end int, total int64) string {

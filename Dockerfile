@@ -25,8 +25,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 ### 3) Runtime
 FROM alpine:3.22
 
-RUN apk add --no-cache ca-certificates tzdata bash caddy
-RUN apk add --no-cache curl
+RUN apk add --no-cache ca-certificates tzdata bash caddy curl
 
 WORKDIR /app
 

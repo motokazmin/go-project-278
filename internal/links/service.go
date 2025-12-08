@@ -25,7 +25,7 @@ var (
 
 type Repository interface {
 	ListLinksRange(ctx context.Context, offset int32, limit int32) ([]db.Link, error)
-	GetLink(ctx context.Context, id int64) (db.Link, error)
+	Link(ctx context.Context, id int64) (db.Link, error)
 	CreateLink(ctx context.Context, arg db.CreateLinkParams) (db.Link, error)
 	UpdateLink(ctx context.Context, arg db.UpdateLinkParams) (db.Link, error)
 	DeleteLink(ctx context.Context, id int64) (int64, error)
@@ -58,7 +58,7 @@ func (s *Service) List(ctx context.Context, offset, limit int32) ([]db.Link, int
 }
 
 func (s *Service) Get(ctx context.Context, id int64) (db.Link, error) {
-	link, err := s.repo.GetLink(ctx, id)
+	link, err := s.repo.Link(ctx, id)
 	if err != nil {
 		return db.Link{}, mapDBError(err)
 	}
@@ -76,7 +76,10 @@ func (s *Service) Create(ctx context.Context, originalURL, shortName string) (db
 
 	// short name not provided; generate with retries on conflict
 	for i := 0; i < maxGenerateTries; i++ {
-		name := randomString(generatedLength)
+		name, err := randomString(generatedLength)
+		if err != nil {
+			return db.Link{}, fmt.Errorf("generate short name: %w", err)
+		}
 		link, err := s.createOnce(ctx, originalURL, name)
 		if err == nil {
 			return link, nil
@@ -129,19 +132,29 @@ func (s *Service) composeShortURL(shortName string) string {
 	return fmt.Sprintf("%s/%s", s.baseURL, shortName)
 }
 
-func randomString(length int) string {
+func randomString(length int) (string, error) {
 	b := make([]rune, length)
 	for i := range b {
-		n := randInt(len(alphabet))
+		n, err := randInt(len(alphabet))
+		if err != nil {
+			return "", fmt.Errorf("generate random index: %w", err)
+		}
 		b[i] = alphabet[n]
 	}
-	return string(b)
+	return string(b), nil
 }
 
-func randInt(max int) int {
+func randInt(max int) (int, error) {
+	if max <= 0 {
+		return 0, fmt.Errorf("max must be positive")
+	}
+
 	var b [1]byte
-	_, _ = rand.Read(b[:])
-	return int(b[0]) % max
+	if _, err := rand.Read(b[:]); err != nil {
+		return 0, fmt.Errorf("read random byte: %w", err)
+	}
+
+	return int(b[0]) % max, nil
 }
 
 func mapDBError(err error) error {

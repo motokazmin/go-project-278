@@ -21,8 +21,8 @@ func (r SQLRepo) ListLinksRange(ctx context.Context, offset int32, limit int32) 
 	})
 }
 
-func (r SQLRepo) GetLink(ctx context.Context, id int64) (db.Link, error) {
-	return r.Queries.GetLink(ctx, id)
+func (r SQLRepo) Link(ctx context.Context, id int64) (db.Link, error) {
+	return r.Queries.Link(ctx, id)
 }
 
 func (r SQLRepo) CreateLink(ctx context.Context, arg db.CreateLinkParams) (db.Link, error) {

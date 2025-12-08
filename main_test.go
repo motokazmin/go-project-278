@@ -28,7 +28,8 @@ func TestPingRoute(t *testing.T) {
 
 	// Создаем симулированный HTTP-запрос
 	// Метод: GET, URL: /ping, Тело: nil
-	req, _ := http.NewRequest(http.MethodGet, "/ping", nil)
+	req, err := http.NewRequest(http.MethodGet, "/ping", nil)
+	assert.NoError(t, err)
 
 	w := httptest.NewRecorder()
 
