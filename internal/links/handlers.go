@@ -51,7 +51,7 @@ func (h *Handler) Register(r *gin.Engine) {
 
 	linksGroup.GET("", h.listLinks)
 	linksGroup.POST("", h.createLink)
-	linksGroup.GET("/:id", h.getLink)
+	linksGroup.GET("/:id", h.link)
 	linksGroup.PUT("/:id", h.updateLink)
 	linksGroup.DELETE("/:id", h.deleteLink)
 }
@@ -88,7 +88,7 @@ func (h *Handler) listLinks(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-func (h *Handler) getLink(c *gin.Context) {
+func (h *Handler) link(c *gin.Context) {
 	id, err := parseID(c.Param("id"))
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": invalidIDMessage})
@@ -110,7 +110,7 @@ func (h *Handler) getLink(c *gin.Context) {
 
 func (h *Handler) createLink(c *gin.Context) {
 	req := new(linkRequest)
-	if err := c.ShouldBindJSON(req); err != nil {
+	if c.ShouldBindJSON(req) != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}
@@ -141,7 +141,7 @@ func (h *Handler) updateLink(c *gin.Context) {
 	}
 
 	var req linkRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if c.ShouldBindJSON(&req) != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
 		return
 	}

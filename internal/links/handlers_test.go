@@ -14,6 +14,10 @@ import (
 	"urlcutter/internal/db"
 )
 
+const (
+	headerContentType = "Content-Type"
+)
+
 type stubService struct {
 	listFn   func(ctx context.Context, offset, limit int32) ([]db.Link, int64, error)
 	getFn    func(ctx context.Context, id int64) (db.Link, error)
@@ -121,7 +125,7 @@ func TestCreateLinkConflict(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"original_url":"https://example.com","short_name":"ex"}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/links", body)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerContentType, "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -153,7 +157,7 @@ func TestUpdateBadRequest(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"original_url":""}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/links/1", body)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerContentType, "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -185,7 +189,7 @@ func TestCreateInvalidPayload(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"original_url":""}`)
 	req := httptest.NewRequest(http.MethodPost, "/api/links", body)
-	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set(headerContentType, "application/json")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
