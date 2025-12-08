@@ -30,3 +30,8 @@ DELETE FROM links
 WHERE id = $1
 RETURNING id;
 
+-- name: GetLinkByShortName :one
+SELECT id, original_url, short_name, short_url, created_at
+FROM links
+WHERE short_name = $1;
+

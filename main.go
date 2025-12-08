@@ -43,6 +43,7 @@ func main() {
 	handler := links.NewHandler(service)
 
 	router := gin.Default()
+	router.TrustedPlatform = gin.PlatformCloudflare
 
 	corsOrigin := os.Getenv("FRONTEND_ORIGIN")
 	if corsOrigin == "" {

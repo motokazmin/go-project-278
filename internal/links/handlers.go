@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -24,9 +25,12 @@ const linkNotFoundMessage = "link not found"
 type LinkService interface {
 	List(ctx context.Context, offset, limit int32) ([]db.Link, int64, error)
 	Get(ctx context.Context, id int64) (db.Link, error)
+	GetByShortName(ctx context.Context, shortName string) (db.Link, error)
 	Create(ctx context.Context, originalURL, shortName string) (db.Link, error)
 	Update(ctx context.Context, id int64, originalURL, shortName string) (db.Link, error)
 	Delete(ctx context.Context, id int64) error
+	CreateVisit(ctx context.Context, linkID int64, ip, userAgent, referer string, status int) (db.LinkVisit, error)
+	ListVisits(ctx context.Context, offset, limit int32) ([]db.LinkVisit, int64, error)
 }
 
 func NewHandler(service LinkService) *Handler {
@@ -45,7 +49,19 @@ type linkResponse struct {
 	ShortURL    string `json:"short_url"`
 }
 
+type linkVisitResponse struct {
+	ID        int64     `json:"id"`
+	LinkID    int64     `json:"link_id"`
+	CreatedAt time.Time `json:"created_at"`
+	IP        string    `json:"ip"`
+	UserAgent string    `json:"user_agent"`
+	Referer   string    `json:"referer"`
+	Status    int32     `json:"status"`
+}
+
 func (h *Handler) Register(r *gin.Engine) {
+	r.GET("/r/:code", h.redirect)
+
 	api := r.Group("/api")
 	linksGroup := api.Group("/links")
 
@@ -54,6 +70,8 @@ func (h *Handler) Register(r *gin.Engine) {
 	linksGroup.GET("/:id", h.link)
 	linksGroup.PUT("/:id", h.updateLink)
 	linksGroup.DELETE("/:id", h.deleteLink)
+
+	api.GET("/link_visits", h.listLinkVisits)
 }
 
 func (h *Handler) listLinks(c *gin.Context) {
@@ -186,6 +204,61 @@ func (h *Handler) deleteLink(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (h *Handler) redirect(c *gin.Context) {
+	code := c.Param("code")
+
+	link, err := h.service.GetByShortName(c.Request.Context(), code)
+	if err != nil {
+		if errors.Is(err, ErrNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": linkNotFoundMessage})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	status := http.StatusFound
+	_, err = h.service.CreateVisit(c.Request.Context(), link.ID, clientIP(c), c.GetHeader("User-Agent"), c.GetHeader("Referer"), status)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	c.Redirect(status, link.OriginalUrl)
+}
+
+func (h *Handler) listLinkVisits(c *gin.Context) {
+	start, end, err := parseRangeParam(c.Query("range"))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		return
+	}
+
+	limit := end - start + 1
+	if limit <= 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		return
+	}
+
+	visits, total, err := h.service.ListVisits(c.Request.Context(), int32(start), int32(limit))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	resp := make([]linkVisitResponse, 0, len(visits))
+	for _, v := range visits {
+		resp = append(resp, toVisitResponse(v))
+	}
+
+	lastIndex := start + len(resp) - 1
+	if len(resp) == 0 {
+		lastIndex = start
+	}
+	c.Header("Content-Range", formatVisitsContentRange(start, lastIndex, total))
+	c.JSON(http.StatusOK, resp)
+}
+
 func parseID(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
 }
@@ -221,4 +294,27 @@ func toResponse(l db.Link) linkResponse {
 		ShortName:   l.ShortName,
 		ShortURL:    l.ShortUrl,
 	}
+}
+
+func toVisitResponse(v db.LinkVisit) linkVisitResponse {
+	return linkVisitResponse{
+		ID:        v.ID,
+		LinkID:    v.LinkID,
+		CreatedAt: v.CreatedAt,
+		IP:        v.Ip,
+		UserAgent: v.UserAgent.String,
+		Referer:   v.Referer.String,
+		Status:    v.Status,
+	}
+}
+
+func formatVisitsContentRange(start, end int, total int64) string {
+	return fmt.Sprintf("link_visits %d-%d/%d", start, end, total)
+}
+
+func clientIP(c *gin.Context) string {
+	if ip := c.ClientIP(); ip != "" {
+		return ip
+	}
+	return ""
 }

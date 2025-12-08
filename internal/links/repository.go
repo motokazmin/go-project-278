@@ -21,8 +21,12 @@ func (r SQLRepo) ListLinksRange(ctx context.Context, offset int32, limit int32) 
 	})
 }
 
-func (r SQLRepo) Link(ctx context.Context, id int64) (db.Link, error) {
-	return r.Queries.Link(ctx, id)
+func (r SQLRepo) GetLink(ctx context.Context, id int64) (db.Link, error) {
+	return r.Queries.GetLink(ctx, id)
+}
+
+func (r SQLRepo) LinkByShortName(ctx context.Context, shortName string) (db.Link, error) {
+	return r.Queries.GetLinkByShortName(ctx, shortName)
 }
 
 func (r SQLRepo) CreateLink(ctx context.Context, arg db.CreateLinkParams) (db.Link, error) {
@@ -39,4 +43,16 @@ func (r SQLRepo) DeleteLink(ctx context.Context, id int64) (int64, error) {
 
 func (r SQLRepo) CountLinks(ctx context.Context) (int64, error) {
 	return r.Queries.CountLinks(ctx)
+}
+
+func (r SQLRepo) ListLinkVisitsRange(ctx context.Context, offset int32, limit int32) ([]db.LinkVisit, error) {
+	return r.Queries.ListLinkVisitsRange(ctx, db.ListLinkVisitsRangeParams{Offset: offset, Limit: limit})
+}
+
+func (r SQLRepo) CountLinkVisits(ctx context.Context) (int64, error) {
+	return r.Queries.CountLinkVisits(ctx)
+}
+
+func (r SQLRepo) CreateLinkVisit(ctx context.Context, arg db.CreateLinkVisitParams) (db.LinkVisit, error) {
+	return r.Queries.CreateLinkVisit(ctx, arg)
 }

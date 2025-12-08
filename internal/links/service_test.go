@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"sort"
+	"time"
 
 	"github.com/jackc/pgconn"
 	"github.com/stretchr/testify/assert"
@@ -16,14 +17,18 @@ import (
 const testBaseURL = "https://short.test"
 
 type memRepo struct {
-	items map[int64]db.Link
-	next  int64
+	items  map[int64]db.Link
+	visits []db.LinkVisit
+	next   int64
+	nextV  int64
 }
 
 func newMemRepo() *memRepo {
 	return &memRepo{
-		items: make(map[int64]db.Link),
-		next:  1,
+		items:  make(map[int64]db.Link),
+		visits: []db.LinkVisit{},
+		next:   1,
+		nextV:  1,
 	}
 }
 
@@ -45,12 +50,21 @@ func (m *memRepo) ListLinksRange(_ context.Context, offset int32, limit int32) (
 	return out[start:end], nil
 }
 
-func (m *memRepo) Link(_ context.Context, id int64) (db.Link, error) {
+func (m *memRepo) GetLink(_ context.Context, id int64) (db.Link, error) {
 	v, ok := m.items[id]
 	if !ok {
 		return db.Link{}, sql.ErrNoRows
 	}
 	return v, nil
+}
+
+func (m *memRepo) LinkByShortName(_ context.Context, shortName string) (db.Link, error) {
+	for _, v := range m.items {
+		if v.ShortName == shortName {
+			return v, nil
+		}
+	}
+	return db.Link{}, sql.ErrNoRows
 }
 
 func (m *memRepo) CreateLink(_ context.Context, arg db.CreateLinkParams) (db.Link, error) {
@@ -101,6 +115,37 @@ func (m *memRepo) DeleteLink(_ context.Context, id int64) (int64, error) {
 
 func (m *memRepo) CountLinks(_ context.Context) (int64, error) {
 	return int64(len(m.items)), nil
+}
+
+func (m *memRepo) ListLinkVisitsRange(_ context.Context, offset int32, limit int32) ([]db.LinkVisit, error) {
+	start := int(offset)
+	if start > len(m.visits) {
+		return []db.LinkVisit{}, nil
+	}
+	end := start + int(limit)
+	if end > len(m.visits) {
+		end = len(m.visits)
+	}
+	return m.visits[start:end], nil
+}
+
+func (m *memRepo) CountLinkVisits(_ context.Context) (int64, error) {
+	return int64(len(m.visits)), nil
+}
+
+func (m *memRepo) CreateLinkVisit(_ context.Context, arg db.CreateLinkVisitParams) (db.LinkVisit, error) {
+	visit := db.LinkVisit{
+		ID:        m.nextV,
+		LinkID:    arg.LinkID,
+		Ip:        arg.Ip,
+		UserAgent: arg.UserAgent,
+		Referer:   arg.Referer,
+		Status:    arg.Status,
+		CreatedAt: time.Now(),
+	}
+	m.nextV++
+	m.visits = append(m.visits, visit)
+	return visit, nil
 }
 
 func TestCreateGeneratesShortName(t *testing.T) {

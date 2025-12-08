@@ -3,7 +3,8 @@
 .git
 .gitignore
 .github
-bin
+bin/*
+!bin/run.sh
 node_modules
 npm-debug.log
 coverage
