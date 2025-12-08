@@ -1,0 +1,14 @@
+.#*
+.DS_Store
+.git
+.gitignore
+.github
+bin
+node_modules
+npm-debug.log
+coverage
+dist
+*.log
+*.tmp
+*.swp
+*.swo

@@ -16,6 +16,8 @@ import (
 
 const (
 	headerContentType = "Content-Type"
+	apiLinksPath      = "/api/links"
+	contentJSON       = "application/json"
 )
 
 type stubService struct {
@@ -74,7 +76,7 @@ func TestListLinks(t *testing.T) {
 	}
 	r := newTestRouter(svc)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/links", nil)
+	req := httptest.NewRequest(http.MethodGet, apiLinksPath, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -124,8 +126,8 @@ func TestCreateLinkConflict(t *testing.T) {
 	r := newTestRouter(svc)
 
 	body := bytes.NewBufferString(`{"original_url":"https://example.com","short_name":"ex"}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/links", body)
-	req.Header.Set(headerContentType, "application/json")
+	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
+	req.Header.Set(headerContentType, contentJSON)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -157,7 +159,7 @@ func TestUpdateBadRequest(t *testing.T) {
 
 	body := bytes.NewBufferString(`{"original_url":""}`)
 	req := httptest.NewRequest(http.MethodPut, "/api/links/1", body)
-	req.Header.Set(headerContentType, "application/json")
+	req.Header.Set(headerContentType, contentJSON)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -188,8 +190,8 @@ func TestCreateInvalidPayload(t *testing.T) {
 	r := newTestRouter(svc)
 
 	body := bytes.NewBufferString(`{"original_url":""}`)
-	req := httptest.NewRequest(http.MethodPost, "/api/links", body)
-	req.Header.Set(headerContentType, "application/json")
+	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
+	req.Header.Set(headerContentType, contentJSON)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
