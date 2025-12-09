@@ -64,3 +64,9 @@ docker run --rm -p 8080:8080 \
   urlcutter
 
   npm start поднимает одновременно API (8080) и фронт (5173). CORS разрешён для FRONTEND_ORIGIN (по умолчанию http://localhost:5173).
+
+## Проблемы сборки Docker и решения
+
+- DNS/сеть внутри контейнера: `apk add git` и загрузка модулей через `proxy.golang.org` падали из-за недоступных зеркал. Решение: отказаться от сетевых скачиваний.
+- Новые зависимости (validator, goose) требовали загрузки в чистом окружении. Решение: перейти на `vendor` + `GOFLAGS=-mod=vendor` и фиксировать утилиты через `tools/tools.go` (импорт `github.com/pressly/goose/v3/cmd/goose`), затем `go mod tidy` и `go mod vendor`.
+- В Dockerfile порядок: сначала `go install goose` (из vendor), потом `go build`; `apk add git` больше не нужен; `GOPROXY=direct` оставлен для обхода прокси. Итог: сборка повторяемая без доступа к интернету.

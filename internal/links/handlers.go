@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/go-playground/validator/v10"
 
 	"urlcutter/internal/db"
 )
@@ -38,8 +40,8 @@ func NewHandler(service LinkService) *Handler {
 }
 
 type linkRequest struct {
-	OriginalURL string `json:"original_url"`
-	ShortName   string `json:"short_name"`
+	OriginalURL string `json:"original_url" binding:"required,url"`
+	ShortName   string `json:"short_name" binding:"omitempty,min=3,max=32"`
 }
 
 type linkResponse struct {
@@ -57,6 +59,80 @@ type linkVisitResponse struct {
 	UserAgent string    `json:"user_agent"`
 	Referer   string    `json:"referer"`
 	Status    int32     `json:"status"`
+}
+
+// handleBindError handles JSON binding errors and returns appropriate response
+func handleBindError(c *gin.Context, err error) {
+	// Check if it's a validation error
+	var validationErrs validator.ValidationErrors
+	if errors.As(err, &validationErrs) {
+		handleValidationError(c, validationErrs)
+		return
+	}
+
+	// Check if it's a JSON syntax error or EOF
+	var syntaxErr *json.SyntaxError
+	var unmarshalErr *json.UnmarshalTypeError
+	if errors.As(err, &syntaxErr) || errors.As(err, &unmarshalErr) || errors.Is(err, io.EOF) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+		return
+	}
+
+	// Default to bad request for other binding errors
+	c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+}
+
+// handleValidationError converts validator errors to unified format
+func handleValidationError(c *gin.Context, errs validator.ValidationErrors) {
+	fieldErrors := make(map[string]string)
+	
+	for _, err := range errs {
+		fieldName := strings.ToLower(err.Field())
+		// Convert field name from struct field to JSON field
+		if fieldName == "originalurl" {
+			fieldName = "original_url"
+		} else if fieldName == "shortname" {
+			fieldName = "short_name"
+		}
+		
+		// Create user-friendly error message
+		var message string
+		switch err.Tag() {
+		case "required":
+			message = fmt.Sprintf("Key: 'linkRequest.%s' Error:Field validation for '%s' failed on the 'required' tag", fieldName, fieldName)
+		case "url":
+			message = fmt.Sprintf("Key: 'linkRequest.%s' Error:Field validation for '%s' failed on the 'url' tag", fieldName, fieldName)
+		case "min":
+			message = fmt.Sprintf("Key: 'linkRequest.%s' Error:Field validation for '%s' failed on the 'min' tag", fieldName, fieldName)
+		case "max":
+			message = fmt.Sprintf("Key: 'linkRequest.%s' Error:Field validation for '%s' failed on the 'max' tag", fieldName, fieldName)
+		default:
+			message = fmt.Sprintf("Key: 'linkRequest.%s' Error:Field validation for '%s' failed on the '%s' tag", fieldName, fieldName, err.Tag())
+		}
+		
+		fieldErrors[fieldName] = message
+	}
+	
+	c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": fieldErrors})
+}
+
+// handleServiceError converts service errors to appropriate HTTP responses
+func handleServiceError(c *gin.Context, err error, context string) {
+	switch {
+	case errors.Is(err, ErrNotFound):
+		c.JSON(http.StatusNotFound, gin.H{"error": linkNotFoundMessage})
+	case errors.Is(err, ErrConflict):
+		// Convert conflict to validation error format
+		c.JSON(http.StatusUnprocessableEntity, gin.H{
+			"errors": map[string]string{
+				"short_name": "short name already in use",
+			},
+		})
+	case errors.Is(err, ErrInvalidInput):
+		c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "invalid input"})
+	default:
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+	}
 }
 
 func (h *Handler) Register(r *gin.Engine) {
@@ -128,24 +204,15 @@ func (h *Handler) link(c *gin.Context) {
 
 func (h *Handler) createLink(c *gin.Context) {
 	req := new(linkRequest)
-	if c.ShouldBindJSON(req) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+	if err := c.ShouldBindJSON(req); err != nil {
+		handleBindError(c, err)
 		return
 	}
 
 	link, err := h.service.Create(c.Request.Context(), req.OriginalURL, req.ShortName)
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrInvalidInput):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "original_url is required"})
-			return
-		case errors.Is(err, ErrConflict):
-			c.JSON(http.StatusConflict, gin.H{"error": "short_name already exists"})
-			return
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+		handleServiceError(c, err, "create")
+		return
 	}
 
 	c.JSON(http.StatusCreated, toResponse(link))
@@ -159,27 +226,15 @@ func (h *Handler) updateLink(c *gin.Context) {
 	}
 
 	var req linkRequest
-	if c.ShouldBindJSON(&req) != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid payload"})
+	if err := c.ShouldBindJSON(&req); err != nil {
+		handleBindError(c, err)
 		return
 	}
 
 	link, err := h.service.Update(c.Request.Context(), id, req.OriginalURL, req.ShortName)
 	if err != nil {
-		switch {
-		case errors.Is(err, ErrInvalidInput):
-			c.JSON(http.StatusBadRequest, gin.H{"error": "original_url and short_name are required"})
-			return
-		case errors.Is(err, ErrConflict):
-			c.JSON(http.StatusConflict, gin.H{"error": "short_name already exists"})
-			return
-		case errors.Is(err, ErrNotFound):
-			c.JSON(http.StatusNotFound, gin.H{"error": linkNotFoundMessage})
-			return
-		default:
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
+		handleServiceError(c, err, "update")
+		return
 	}
 
 	c.JSON(http.StatusOK, toResponse(link))

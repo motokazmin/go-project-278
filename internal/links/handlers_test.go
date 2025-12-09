@@ -5,8 +5,10 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -148,13 +150,94 @@ func TestCreateLinkConflict(t *testing.T) {
 	}
 	r := newTestRouter(svc)
 
-	body := bytes.NewBufferString(`{"original_url":"https://example.com","short_name":"ex"}`)
+	body := bytes.NewBufferString(`{"original_url":"https://example.com","short_name":"existing"}`)
 	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
 	req.Header.Set(headerContentType, contentJSON)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusConflict, w.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), "short name already in use")
+	assert.Contains(t, w.Body.String(), `"errors"`)
+}
+
+func TestCreateLinkInvalidURL(t *testing.T) {
+	svc := &stubService{}
+	r := newTestRouter(svc)
+
+	body := bytes.NewBufferString(`{"original_url":"not-a-valid-url","short_name":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
+	req.Header.Set(headerContentType, contentJSON)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"original_url"`)
+	assert.Contains(t, w.Body.String(), "url")
+}
+
+func TestCreateLinkMissingURL(t *testing.T) {
+	svc := &stubService{}
+	r := newTestRouter(svc)
+
+	body := bytes.NewBufferString(`{"short_name":"test"}`)
+	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
+	req.Header.Set(headerContentType, contentJSON)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"original_url"`)
+	assert.Contains(t, w.Body.String(), "required")
+}
+
+func TestCreateLinkShortNameTooShort(t *testing.T) {
+	svc := &stubService{}
+	r := newTestRouter(svc)
+
+	body := bytes.NewBufferString(`{"original_url":"https://example.com","short_name":"ab"}`)
+	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
+	req.Header.Set(headerContentType, contentJSON)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"short_name"`)
+	assert.Contains(t, w.Body.String(), "min")
+}
+
+func TestCreateLinkShortNameTooLong(t *testing.T) {
+	svc := &stubService{}
+	r := newTestRouter(svc)
+
+	longName := strings.Repeat("a", 33)
+	body := bytes.NewBufferString(fmt.Sprintf(`{"original_url":"https://example.com","short_name":"%s"}`, longName))
+	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
+	req.Header.Set(headerContentType, contentJSON)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"short_name"`)
+	assert.Contains(t, w.Body.String(), "max")
+}
+
+func TestCreateLinkMalformedJSON(t *testing.T) {
+	svc := &stubService{}
+	r := newTestRouter(svc)
+
+	body := bytes.NewBufferString(`{bad json`)
+	req := httptest.NewRequest(http.MethodPost, apiLinksPath, body)
+	req.Header.Set(headerContentType, contentJSON)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Contains(t, w.Body.String(), "invalid request")
 }
 
 func TestGetLinkNotFound(t *testing.T) {
@@ -186,7 +269,7 @@ func TestUpdateBadRequest(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
 }
 
 func TestDeleteNotFound(t *testing.T) {
@@ -218,7 +301,41 @@ func TestCreateInvalidPayload(t *testing.T) {
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+}
+
+func TestUpdateLinkValidation(t *testing.T) {
+	svc := &stubService{}
+	r := newTestRouter(svc)
+
+	// Test invalid URL in update
+	body := bytes.NewBufferString(`{"original_url":"not-a-url","short_name":"test"}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/links/1", body)
+	req.Header.Set(headerContentType, contentJSON)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), `"errors"`)
+	assert.Contains(t, w.Body.String(), `"original_url"`)
+}
+
+func TestUpdateLinkConflict(t *testing.T) {
+	svc := &stubService{
+		updateFn: func(ctx context.Context, id int64, originalURL, shortName string) (db.Link, error) {
+			return db.Link{}, ErrConflict
+		},
+	}
+	r := newTestRouter(svc)
+
+	body := bytes.NewBufferString(`{"original_url":"https://example.com","short_name":"existing"}`)
+	req := httptest.NewRequest(http.MethodPut, "/api/links/1", body)
+	req.Header.Set(headerContentType, contentJSON)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, w.Code)
+	assert.Contains(t, w.Body.String(), "short name already in use")
 }
 
 func TestUnexpectedError(t *testing.T) {
