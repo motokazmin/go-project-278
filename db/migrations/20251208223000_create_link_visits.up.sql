@@ -2,7 +2,7 @@
 CREATE TABLE link_visits (
     id         BIGSERIAL PRIMARY KEY,
     link_id    BIGINT NOT NULL REFERENCES links(id) ON DELETE CASCADE,
-    ip         VARCHAR(255) NOT NULL,
+    ip         VARCHAR2(255) NOT NULL,
     user_agent TEXT,
     referer    TEXT,
     status     INTEGER NOT NULL,

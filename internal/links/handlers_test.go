@@ -18,10 +18,14 @@ import (
 )
 
 const (
-	headerContentType = "Content-Type"
-	apiLinksPath      = "/api/links"
-	apiLinkVisitsPath = "/api/link_visits"
-	contentJSON       = "application/json"
+	headerContentType  = "Content-Type"
+	headerContentRange = "Content-Range"
+	apiLinksPath       = "/api/links"
+	apiLinkByIDPath    = "/api/links/1"
+	apiLinkVisitsPath  = "/api/link_visits"
+	contentJSON        = "application/json"
+	testIPOne          = "127.0.0.1"
+	testIPTwo          = "127.0.0.2"
 )
 
 type stubService struct {
@@ -107,7 +111,7 @@ func TestListLinks(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	assert.Contains(t, w.Body.String(), `"id":1`)
-	assert.Equal(t, "links 0-0/1", w.Header().Get("Content-Range"))
+	assert.Equal(t, "links 0-0/1", w.Header().Get(headerContentRange))
 }
 
 func TestListLinksWithRange(t *testing.T) {
@@ -128,7 +132,7 @@ func TestListLinksWithRange(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "links 5-6/11", w.Header().Get("Content-Range"))
+	assert.Equal(t, "links 5-6/11", w.Header().Get(headerContentRange))
 }
 
 func TestListLinksInvalidRange(t *testing.T) {
@@ -310,7 +314,7 @@ func TestUpdateLinkValidation(t *testing.T) {
 
 	// Test invalid URL in update
 	body := bytes.NewBufferString(`{"original_url":"not-a-url","short_name":"test"}`)
-	req := httptest.NewRequest(http.MethodPut, "/api/links/1", body)
+	req := httptest.NewRequest(http.MethodPut, apiLinkByIDPath, body)
 	req.Header.Set(headerContentType, contentJSON)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -329,7 +333,7 @@ func TestUpdateLinkConflict(t *testing.T) {
 	r := newTestRouter(svc)
 
 	body := bytes.NewBufferString(`{"original_url":"https://example.com","short_name":"existing"}`)
-	req := httptest.NewRequest(http.MethodPut, "/api/links/1", body)
+	req := httptest.NewRequest(http.MethodPut, apiLinkByIDPath, body)
 	req.Header.Set(headerContentType, contentJSON)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -346,7 +350,7 @@ func TestUnexpectedError(t *testing.T) {
 	}
 	r := newTestRouter(svc)
 
-	req := httptest.NewRequest(http.MethodGet, "/api/links/1", nil)
+	req := httptest.NewRequest(http.MethodGet, apiLinkByIDPath, nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
 
@@ -414,8 +418,8 @@ func TestListLinkVisits(t *testing.T) {
 			assert.Equal(t, int32(0), offset)
 			assert.Equal(t, int32(10), limit)
 			return []db.LinkVisit{
-				{ID: 1, LinkID: 2, Ip: "1.1.1.1", UserAgent: sql.NullString{String: "ua", Valid: true}, Referer: sql.NullString{String: "ref", Valid: true}, Status: 302},
-				{ID: 2, LinkID: 3, Ip: "2.2.2.2", Status: 404},
+				{ID: 1, LinkID: 2, Ip: testIPOne, UserAgent: sql.NullString{String: "ua", Valid: true}, Referer: sql.NullString{String: "ref", Valid: true}, Status: 302},
+				{ID: 2, LinkID: 3, Ip: testIPTwo, Status: 404},
 			}, 2, nil
 		},
 	}
@@ -426,7 +430,7 @@ func TestListLinkVisits(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "link_visits 0-1/2", w.Header().Get("Content-Range"))
-	assert.Contains(t, w.Body.String(), `"ip":"1.1.1.1"`)
+	assert.Equal(t, "link_visits 0-1/2", w.Header().Get(headerContentRange))
+	assert.Contains(t, w.Body.String(), fmt.Sprintf(`"ip":"%s"`, testIPOne))
 	assert.Contains(t, w.Body.String(), `"status":404`)
 }

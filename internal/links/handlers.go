@@ -23,6 +23,7 @@ type Handler struct {
 
 const invalidIDMessage = "invalid id"
 const linkNotFoundMessage = "link not found"
+const invalidRangeMessage = "invalid range"
 
 type LinkService interface {
 	List(ctx context.Context, offset, limit int32) ([]db.Link, int64, error)
@@ -85,7 +86,7 @@ func handleBindError(c *gin.Context, err error) {
 // handleValidationError converts validator errors to unified format
 func handleValidationError(c *gin.Context, errs validator.ValidationErrors) {
 	fieldErrors := make(map[string]string)
-	
+
 	for _, err := range errs {
 		fieldName := strings.ToLower(err.Field())
 		// Convert field name from struct field to JSON field
@@ -94,7 +95,7 @@ func handleValidationError(c *gin.Context, errs validator.ValidationErrors) {
 		} else if fieldName == "shortname" {
 			fieldName = "short_name"
 		}
-		
+
 		// Create user-friendly error message
 		var message string
 		switch err.Tag() {
@@ -109,15 +110,15 @@ func handleValidationError(c *gin.Context, errs validator.ValidationErrors) {
 		default:
 			message = fmt.Sprintf("Key: 'linkRequest.%s' Error:Field validation for '%s' failed on the '%s' tag", fieldName, fieldName, err.Tag())
 		}
-		
+
 		fieldErrors[fieldName] = message
 	}
-	
+
 	c.JSON(http.StatusUnprocessableEntity, gin.H{"errors": fieldErrors})
 }
 
 // handleServiceError converts service errors to appropriate HTTP responses
-func handleServiceError(c *gin.Context, err error, context string) {
+func handleServiceError(c *gin.Context, err error) {
 	switch {
 	case errors.Is(err, ErrNotFound):
 		c.JSON(http.StatusNotFound, gin.H{"error": linkNotFoundMessage})
@@ -153,13 +154,13 @@ func (h *Handler) Register(r *gin.Engine) {
 func (h *Handler) listLinks(c *gin.Context) {
 	start, end, err := parseRangeParam(c.Query("range"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": invalidRangeMessage})
 		return
 	}
 
 	limit := end - start + 1
 	if limit <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": invalidRangeMessage})
 		return
 	}
 
@@ -211,7 +212,7 @@ func (h *Handler) createLink(c *gin.Context) {
 
 	link, err := h.service.Create(c.Request.Context(), req.OriginalURL, req.ShortName)
 	if err != nil {
-		handleServiceError(c, err, "create")
+		handleServiceError(c, err)
 		return
 	}
 
@@ -233,7 +234,7 @@ func (h *Handler) updateLink(c *gin.Context) {
 
 	link, err := h.service.Update(c.Request.Context(), id, req.OriginalURL, req.ShortName)
 	if err != nil {
-		handleServiceError(c, err, "update")
+		handleServiceError(c, err)
 		return
 	}
 
@@ -285,13 +286,13 @@ func (h *Handler) redirect(c *gin.Context) {
 func (h *Handler) listLinkVisits(c *gin.Context) {
 	start, end, err := parseRangeParam(c.Query("range"))
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": invalidRangeMessage})
 		return
 	}
 
 	limit := end - start + 1
 	if limit <= 0 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid range"})
+		c.JSON(http.StatusBadRequest, gin.H{"error": invalidRangeMessage})
 		return
 	}
 
