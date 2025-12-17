@@ -67,6 +67,7 @@ func main() {
 		}); err != nil {
 			log.Fatalf("failed to init Sentry: %v", err)
 		}
+		log.Println("Sentry is active")
 		router.Use(sentrygin.New(sentrygin.Options{}))
 	}
 
