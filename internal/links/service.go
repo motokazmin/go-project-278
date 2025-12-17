@@ -167,7 +167,7 @@ func (s *Service) createOnce(ctx context.Context, originalURL, shortName string)
 }
 
 func (s *Service) composeShortURL(shortName string) string {
-	return fmt.Sprintf("%s/%s", s.baseURL, shortName)
+	return fmt.Sprintf("%s/r/%s", s.baseURL, shortName)
 }
 
 func randomString(length int) (string, error) {
