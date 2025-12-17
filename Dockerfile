@@ -3,7 +3,7 @@ FROM node:24-alpine AS frontend-builder
 WORKDIR /build/frontend
 
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci --prefer-offline --no-audit
+RUN --mount=type=cache,id=npm-cache,target=/root/.npm npm ci --prefer-offline --no-audit
 
 ### 2) Build backend
 FROM golang:1.25-alpine AS backend-builder
@@ -14,13 +14,10 @@ WORKDIR /build/code
 
 COPY . .
 
-RUN --mount=type=cache,target=/root/.cache/go-build \
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install github.com/pressly/goose/v3/cmd/goose
-
-RUN --mount=type=cache,target=/root/.cache/go-build \
+RUN --mount=type=cache,id=go-build-cache,target=/root/.cache/go-build \
+  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install github.com/pressly/goose/v3/cmd/goose && \
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app .
 
-### 3) Runtime
 FROM alpine:3.22
 
 RUN apk add --no-cache ca-certificates tzdata bash caddy curl
@@ -45,4 +42,3 @@ COPY Caddyfile /etc/caddy/Caddyfile
 EXPOSE 80
 
 CMD ["/app/bin/run.sh"]
-
