@@ -35,7 +35,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to connect database: %v", err)
 	}
-	defer conn.Close()
+	defer closeDB(conn)
 
 	queries := db.New(conn)
 	repo := links.NewRepo(queries)
@@ -106,4 +106,13 @@ func openDB(dsn string) (*sql.DB, error) {
 		return nil, err
 	}
 	return db, nil
+}
+
+func closeDB(db *sql.DB) {
+	if db == nil {
+		return
+	}
+	if err := db.Close(); err != nil {
+		log.Printf("failed to close database: %v", err)
+	}
 }
