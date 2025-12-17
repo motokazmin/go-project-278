@@ -33,7 +33,7 @@ func main() {
 
 	conn, err := openDB(dbURL)
 	if err != nil {
-		log.Fatalf("failed to connect database: %v", err)
+		log.Fatalf("failed to connect database:  %v", err)
 	}
 	defer closeDB(conn)
 

@@ -1,3 +1,4 @@
+# syntax=docker/dockerfile:1.7
 FROM node:24-alpine AS frontend-builder
 WORKDIR /build/frontend
 
@@ -10,7 +11,14 @@ ENV GOFLAGS=-mod=vendor
 
 WORKDIR /build/code
 
-COPY . .
+COPY go.mod go.sum ./
+COPY vendor/ ./vendor/
+
+COPY internal/ ./internal/
+COPY db/ ./db/
+COPY Caddyfile .
+COPY main.go .
+COPY bin/run.sh ./bin/run.sh
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install github.com/pressly/goose/v3/cmd/goose && \
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app .
