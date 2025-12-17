@@ -1,13 +1,10 @@
-# Сборка с использованием Docker BuildKit для кэширования
-
 ### 1) Build frontend
 FROM node:24-alpine AS frontend-builder
 WORKDIR /build/frontend
 
 COPY package*.json ./
-
-# ИСПРАВЛЕНИЕ: id=pkgjson-npm-cache
-RUN --mount=type=cache,id=pkgjson-npm-cache,target=/root/.npm npm ci --prefer-offline --no-audit
+# Удалено кэширование: npm-зависимости будут скачиваться при каждой сборке
+RUN npm ci --prefer-offline --no-audit
 
 ### 2) Build backend
 FROM golang:1.25-alpine AS backend-builder
@@ -18,9 +15,8 @@ WORKDIR /build/code
 
 COPY . .
 
-# ИСПРАВЛЕНИЕ: id=gomod-go-build-cache
-RUN --mount=type=cache,id=gomod-go-build-cache,target=/root/.cache/go-build \
-  CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install github.com/pressly/goose/v3/cmd/goose && \
+# Удалено кэширование: Go-модули будут собираться при каждой сборке
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install github.com/pressly/goose/v3/cmd/goose && \
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app .
 
 ### 3) Runtime (Финальный образ)
