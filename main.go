@@ -28,7 +28,7 @@ func main() {
 
 	dbURL := os.Getenv("DATABASE_URL")
 	if dbURL == "" {
-		log.Fatal("DATABASE_URL is required")
+		log.Fatal("DATABASE_URL is required ")
 	}
 
 	conn, err := openDB(dbURL)
