@@ -59,7 +59,7 @@ func main() {
 
 	dsn := os.Getenv("SENTRY_DSN")
 	if dsn == "" {
-		log.Println("Sentry disabled: SENTRY_DSN is not set")
+		log.Println("warning: Sentry disabled: SENTRY_DSN is not set")
 	} else {
 		if err := sentry.Init(sentry.ClientOptions{
 			Dsn:              dsn,
@@ -67,7 +67,7 @@ func main() {
 		}); err != nil {
 			log.Fatalf("failed to init Sentry: %v", err)
 		}
-		log.Println("Sentry is active")
+		log.Println("Sentry is active!")
 		router.Use(sentrygin.New(sentrygin.Options{}))
 	}
 
