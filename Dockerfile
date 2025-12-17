@@ -6,8 +6,8 @@ WORKDIR /build/frontend
 
 COPY package*.json ./
 
-# ИСПРАВЛЕНИЕ: Добавлен key=dependencies
-RUN --mount=type=cache,id=npm-cache,key=dependencies,target=/root/.npm npm ci --prefer-offline --no-audit
+# ИСПРАВЛЕНИЕ: id=pkgjson-npm-cache
+RUN --mount=type=cache,id=pkgjson-npm-cache,target=/root/.npm npm ci --prefer-offline --no-audit
 
 ### 2) Build backend
 FROM golang:1.25-alpine AS backend-builder
@@ -18,8 +18,8 @@ WORKDIR /build/code
 
 COPY . .
 
-# ИСПРАВЛЕНИЕ: Добавлен key=go-build
-RUN --mount=type=cache,id=go-build-cache,key=go-build,target=/root/.cache/go-build \
+# ИСПРАВЛЕНИЕ: id=gomod-go-build-cache
+RUN --mount=type=cache,id=gomod-go-build-cache,target=/root/.cache/go-build \
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go install github.com/pressly/goose/v3/cmd/goose && \
   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o /build/app .
 
